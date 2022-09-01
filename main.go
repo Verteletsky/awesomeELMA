@@ -9,6 +9,76 @@ import (
 )
 
 func main() {
+	startParseGo(urls())
+}
+
+func startParseGo(listUrls []string) {
+	// создаем два канала
+	jobs := make(chan string, 5)
+	results := make(chan int, 5)
+
+	// максимум до 5 воркеров
+	countWorker := len(listUrls)
+	if countWorker > 5 {
+		countWorker = 5
+	} else {
+		countWorker = len(listUrls)
+	}
+
+	// анализируем регулярку
+	r, err := regexp.Compile("Go{1}")
+	worker(countWorker, err, jobs, results, r) // запускаем воркер
+
+	// заполняет джобы данными
+	for j := 0; j < len(listUrls); j++ {
+		jobs <- listUrls[j]
+	}
+	close(jobs) // закрываем каналы
+
+	printTotal(listUrls, results) // выводим результат
+}
+
+func printTotal(listUrls []string, results chan int) {
+	total := 0
+	for re := 0; re < len(listUrls); re++ {
+		total += <-results
+	}
+
+	fmt.Println("Total: ", total)
+}
+
+func worker(countWorker int, err error, jobs chan string, results chan int, r *regexp.Regexp) {
+	for w := 0; w < countWorker; w++ {
+		go func(jobs <-chan string, results chan<- int, r *regexp.Regexp) {
+			if err != nil {
+				log.Println(err)
+			}
+			for j := range jobs {
+				res := findGo(r, j)
+				go func() {
+					results <- res
+				}()
+				fmt.Println("Count for:", j, res)
+			}
+		}(jobs, results, r)
+	}
+}
+
+func findGo(r *regexp.Regexp, j string) int {
+	response, err := http.Get(j)
+	if err != nil {
+		log.Println(err)
+	}
+	readAll, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Println(err)
+	}
+	response.Body.Close()
+	strings := r.FindAllStringIndex(string(readAll), -1)
+	return len(strings)
+}
+
+func urls() []string {
 	listUrls := []string{
 		"https://go.dev/",
 		"https://go.dev/",
@@ -34,67 +104,6 @@ func main() {
 		"https://go.dev/",
 		"https://go.dev/",
 		"https://go.dev/",
-		"https://go.dev/",
-		"https://go.dev/",
-		"https://go.dev/",
-		"https://go.dev/",
-		"https://go.dev/",
-		"https://go.dev/",
-		"https://go.dev/",
 	}
-
-	const numJobs = 5
-	jobs := make(chan string, numJobs)
-	results := make(chan int, numJobs)
-
-	countWorker := len(listUrls)
-	if countWorker > 5 {
-		countWorker = 5
-	} else {
-		countWorker = len(listUrls)
-	}
-
-	for w := 0; w < countWorker; w++ {
-		go worker(jobs, results)
-	}
-
-	for j := 0; j < len(listUrls); j++ {
-		jobs <- listUrls[j]
-	}
-	close(jobs)
-
-	total := 0
-	for r := 0; r < len(listUrls); r++ {
-		total += <-results
-	}
-
-	fmt.Println("Total: ", total)
-}
-
-func worker(jobs <-chan string, result chan<- int) {
-	for j := range jobs {
-		response, err := http.Get(j)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		readAll, err := io.ReadAll(response.Body)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		response.Body.Close()
-		go func() {
-			res := findGo(string(readAll))
-			fmt.Println("Count for:", j, res)
-			result <- res
-		}()
-	}
-}
-
-func findGo(str string) int {
-	r, err := regexp.Compile("Go{1}")
-	if err != nil {
-		log.Fatalln(err)
-	}
-	strings := r.FindAllStringIndex(str, -1)
-	return len(strings)
+	return listUrls
 }
