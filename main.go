@@ -65,7 +65,7 @@ func worker(countWorker int, jobs chan string, results chan int, r *regexp.Regex
 }
 
 func findGo(r *regexp.Regexp, j string) int {
-	response, err := http.Get(j)
+	response, err := http.Get(j) // todo refactor to NewRequestWithContext
 	if err != nil {
 		log.Println(err)
 	}
