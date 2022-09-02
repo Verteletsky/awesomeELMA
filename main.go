@@ -27,13 +27,18 @@ func startParseGo(listUrls []string) {
 
 	// анализируем регулярку
 	r, err := regexp.Compile("Go{1}")
-	worker(countWorker, err, jobs, results, r) // запускаем воркер
+	if err != nil {
+		log.Println(err)
+	}
+	worker(countWorker, jobs, results, r) // запускаем воркер
 
 	// заполняет джобы данными
-	for j := 0; j < len(listUrls); j++ {
-		jobs <- listUrls[j]
-	}
-	close(jobs) // закрываем каналы
+	go func() {
+		for j := 0; j < len(listUrls); j++ {
+			jobs <- listUrls[j]
+		}
+		close(jobs) // закрываем каналы
+	}()
 
 	printTotal(listUrls, results) // выводим результат
 }
@@ -47,17 +52,12 @@ func printTotal(listUrls []string, results chan int) {
 	fmt.Println("Total: ", total)
 }
 
-func worker(countWorker int, err error, jobs chan string, results chan int, r *regexp.Regexp) {
+func worker(countWorker int, jobs chan string, results chan int, r *regexp.Regexp) {
 	for w := 0; w < countWorker; w++ {
 		go func(jobs <-chan string, results chan<- int, r *regexp.Regexp) {
-			if err != nil {
-				log.Println(err)
-			}
 			for j := range jobs {
 				res := findGo(r, j)
-				go func() {
-					results <- res
-				}()
+				results <- res
 				fmt.Println("Count for:", j, res)
 			}
 		}(jobs, results, r)
